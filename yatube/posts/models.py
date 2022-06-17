@@ -102,5 +102,11 @@ class Follow(models.Model):
         verbose_name='Автор, на которого подписываются'
     )
 
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['user', 'author'], name='unique_user_author_pair')
+        ]
+
     def __str__(self):
         return f'Author {self.author.id} - User {self.user.id}'
