@@ -2,11 +2,12 @@ import shutil
 import tempfile
 
 from django.conf import settings
+from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 from posts.forms import PostForm
-from posts.models import Group, Post, User
+from posts.models import Comment, Group, Post, User
 
 TEMP_MEDIA_ROOT = tempfile.mkdtemp(dir=settings.BASE_DIR)
 
@@ -44,6 +45,7 @@ class PostsFormTests(TestCase):
         self.authorized_client = Client()
         self.authorized_client.force_login(PostsFormTests.user)
         self.post_id = PostsFormTests.post.id
+        cache.close()
 
     def test_post_creation(self):
         """.Проверяем корректность создания нового поста из формы."""
@@ -135,3 +137,31 @@ class PostsFormTests(TestCase):
                 image='posts/small.gif'
             ).exists(),
             msg='Содержимое тестового поста не совпадает с ожидаемым')
+
+    def test_guest_user_cannot_add_posts(self):
+        """.Проверяем, что неавторизованный пользователь не может добавить
+        пост.
+        """
+        self.guest_client = Client()
+        initial_post_count = Post.objects.count()
+        form_data = {
+            'text': 'Тестовый пост из формы',
+        }
+        response = self.guest_client.post(
+            reverse('posts:post_create'), data=form_data, follow=True)
+        self.assertEqual(Post.objects.count(), initial_post_count)
+        self.assertRedirects(response, '/auth/login/?next=/create/')
+
+    def test_guest_user_cannot_add_comments(self):
+        """.Проверяем, что неавторизованный пользователь не может добавить
+        комментарий.
+        """
+        self.guest_client = Client()
+        initial_comment_count = Comment.objects.count()
+        url = reverse('posts:add_comment', kwargs={'post_id': self.post.id})
+        form_data = {
+            'text': 'Тестовый комментарий',
+        }
+        response = self.guest_client.post(url, data=form_data, follow=True)
+        self.assertEqual(Comment.objects.count(), initial_comment_count)
+        self.assertRedirects(response, '/auth/login/?next=' + url)
